@@ -32,10 +32,15 @@
 </IfModule>
 
 # ------------------------------------------------------------------- HTTPS
-# The canonical host is one thing, not four. Without this, https://site,
-# http://site, https://www.site and http://www.site are four addresses
-# serving one site, which splits search ranking and breaks the CSP's
-# 'self'. Redirect to HTTPS and drop www.
+# The canonical host is one thing, not four. Left alone, a domain answers on
+# four combinations — plain and secure, with and without the www prefix — and
+# each one is a separate address serving identical pages. That splits search
+# ranking between them and undermines the CSP's own 'self'.
+#
+# (Spelled out in words rather than as example URLs on purpose: tools/
+# set_domain.py scans these files for the site's own host, and an
+# illustrative URL in a comment reads to it as a second, conflicting domain.
+# It did, and it reported the clash correctly.)
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
@@ -45,10 +50,23 @@
   RewriteCond %{HTTP:X-Forwarded-Proto} =http
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-  # Then strip www. If you would rather keep www as canonical, delete this
-  # block and point the apex at www instead — but pick one and keep it.
-  RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
-  RewriteRule ^ https://%1%{REQUEST_URI} [L,R=301]
+  # Then force www, because www.shaibuhamad.com is the form the owner uses and
+  # the one thing that must not vary is which form is canonical. Every URL the
+  # site declares about itself — og:url, canonical, the sitemap, the
+  # structured data — says www, and this redirect is what makes that true
+  # rather than merely claimed.
+  #
+  # Printing it without the www is still fine: shaibuhamad.com lands here and
+  # is redirected, so a cup or a menu can carry the shorter form.
+  #
+  # To switch to the apex instead, reverse this block and re-run
+  # tools/set_domain.py with the bare host. Do not change one without the
+  # other: a canonical tag pointing at a URL that 301s away from it is a
+  # self-contradiction crawlers resolve by ignoring both.
+  RewriteCond %{HTTP_HOST} !^www\. [NC]
+  RewriteCond %{HTTP_HOST} !^localhost [NC]
+  RewriteCond %{HTTP_HOST} !^127\. [NC]
+  RewriteRule ^ https://www.%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 </IfModule>
 
 # ------------------------------------------------------------------ caching
